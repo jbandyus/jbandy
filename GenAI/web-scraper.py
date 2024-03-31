@@ -1,5 +1,5 @@
 # web-scraper.py
-# V .1 alpha
+# V .2 alpha
 # Created by James Bandy for James Bandy
 # all rights reserved, working on the right license to use 
 # Let's get some great vector data from a public web site.
@@ -11,13 +11,13 @@
 # Outputs
 
 # Statics
-PROFILE_NAME='default'
-REGION_NAME='us-west-2'
+PROFILE_NAME='default' # currently unused
+REGION_NAME='us-west-2' # currently unused
 BROWSER='mozilla' # for now firefox mozilla is the only supported browser
-USAGE='sort it out'
 
 # Includes
 import sys
+import argparse
 import botocore
 import boto3
 import numpy
@@ -109,24 +109,26 @@ def get_text_from_urls(urls):
 
 # Main script
 if __name__ == '__main__':
-    PROXY_STRIP=0
-    # ADD change this to argparse
-    if (sys.argv[1]=='-h' or sys.argv[1]=='--help'):
-        print(USAGE)
-        exit(0) 
-    if (sys.argv[1]=='-s' or sys.argv[1]=='--strip'):
-        PROXY_STRIP=sys.argv[2]
-        sitemap_urls= sys.argv[3]
-    else:    
-        sitemap_urls= sys.argv[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("sitemap_urls", help="list of XML sitemap URLS to gather URL info from, separated with commas")
+    parser.add_argument('-s','--strip', nargs=1,help='string to replace reverse proxy data in each URL for examplei every: https://n9./ becomes https://')
+    parser.add_argument("-v", "--verbosity", action="count", default=0, help="increase output verbosity")
+    args = parser.parse_args()
+    PROXY_STRIP=args.strip[0]
+    DEBUG=args.verbosity
+    sitemap_urls= args.sitemap_urls.split(',')
     print(f"PROXY_STRIP={PROXY_STRIP}")
+    print(f"DEBUG={DEBUG}")
     print(f"sitemap_urls={sitemap_urls}")
-    urls= get_urls_from_sitemap(sitemap_urls)
+    urls= []
+    for sitemap_url in sitemap_urls:
+        urls.extend(get_urls_from_sitemap(sitemap_url))
     print(f"The number of sitemap urls are {len(urls)}")
+    if (DEBUG): print(f"List of URLS extracted from the sitemaps {urls}")
     if (PROXY_STRIP): urls=[url.replace(PROXY_STRIP, 'https://') for url in urls]
     # nice for debugging less data
-    #urls= urls[:2]
-    print(f"The number of sitemap urls are {len(urls)}")
+    urls= urls[:2]
+    if (DEBUG): print(f"The number of sitemap urls to test are {len(urls)}")
     full_sites_text= get_text_from_urls(urls)
     # since this is unknown text lets make sure we can write it
     #full_sites_text= [x.encode('utf-8') for x in full_sites_text]
