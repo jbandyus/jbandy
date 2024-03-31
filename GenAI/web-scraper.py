@@ -1,7 +1,7 @@
 # web-scraper.py
 # V .2 alpha
-# Created by James Bandy for James Bandy
-# all rights reserved, working on the right license to use 
+# Created by James Bandy
+# See the attached LICENSE file, I use the MIT Open Source License https://opensource.org/license/mit 
 # Let's get some great vector data from a public web site.
 # This is written to run from a windows 10/11 host with the software installed per the readme.txt
 #
