@@ -1,5 +1,5 @@
 This project will test a number of vector store databases for overall performance and measure their impact on actual Generative AI query
-performance. We will scape a websites sitemap (XML only for now) to get content to build out the vector database. I also plan to add a PDF
+performance. We will scrape a websites sitemap (XML only for now) to get content to build out the vector database. I also plan to add a PDF
 scraper. 
 
 Scripts:
