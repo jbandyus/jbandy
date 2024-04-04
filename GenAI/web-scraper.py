@@ -1,10 +1,11 @@
 # web-scraper.py
-# V .2 alpha
+# V .3 alpha
 # Created by James Bandy
-# See the attached LICENSE file, I use the MIT Open Source License https://opensource.org/license/mit 
+# See the attached LICENSE file for the MIT Open Source License 
 # Let's get some great vector data from a public web site.
+# Let's write the data to two local vector stores 1st, Chromadb and FAISS
+# Use OpenAI embeddings and all-MiniLM-L6-v2 sentence transformer
 # This is written to run from a windows 10/11 host with the software installed per the readme.txt
-#
 #
 # Inputs
 
@@ -22,16 +23,28 @@ import botocore
 import boto3
 import numpy
 import langchain
-from langchain_community.document_loaders import PyPDFLoader
+
 # For more info on the SeleniumURLLoader see
 #  https://api.python.langchain.com/en/latest/document_loaders/langchain_community.document_loaders.url_selenium.SeleniumURLLoader.html
-from langchain_community.document_loaders import SeleniumURLLoader
+from langchain_community.document_loaders.url_selenium import SeleniumURLLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from selenium import webdriver
 import requests
 # currently unused
 # import xmltodict
 from lxml import etree
+from time import perf_counter as pc
+# new way from langchain_community.document_loaders.pdf import PyPDFLoader
+from langchain.document_loaders import PyPDFLoader
+from langchain_community.embeddings.sentence_transformer import (SentenceTransformerEmbeddings,)
+# new way: from langchain_openai import OpenAIEmbeddings
+from langchain_community.embeddings import OpenAIEmbeddings
+# new way from langchain_community.vectorstores.chroma import Chroma
+from langchain_community.vectorstores.chroma import Chroma
+# old way: from langchain.vectorstores import Chroma
+# from langchain_community.vectorstores.faiss import FAISS
+from langchain.vectorstores import FAISS
+from openai import OpenAI
 
 # completely unused with the langchain Selenium
 # I will be using this later...
@@ -104,8 +117,55 @@ def get_text_from_urls(urls):
     # a chunk overlap of 5% seems reasonable
     text_split= RecursiveCharacterTextSplitter(chunk_size=4000, chunk_overlap=200)
     
-    texts= text_split.split_documents(data)
-    return texts
+    docs= text_split.split_documents(data)
+    return docs
+
+# writing with chroma is apparently very strange and maybe broken using the langchain version of Chroma
+# although this works
+def embed_with_chroma(docs):
+    # create the open-source embedding function
+    embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+
+    # save to disk
+    db2 = Chroma.from_documents(docs, embedding_function, persist_directory="./chroma_db")
+    db2.persist()
+
+    # extra functions for use later in another script
+    #
+    # load from disk
+    #db3 = Chroma(persist_directory="./chroma_db", embedding_function=embedding_function)
+    #docs = db3.similarity_search(query)
+    #print(docs[0].page_content)
+    # load it into Chroma
+    #db = Chroma.from_documents(docs, embedding_function)
+    # query it
+    #query = "What is being done to protect the wild wolves of North America?"
+    #docs = db.similarity_search(query)
+    # print results
+    #print(docs[0].page_content)
+
+def write_text_to_file(docs):
+        
+    text_fh= open('sites.txt', 'a')
+    for doc in full_sites_text:
+        try:
+            # for extreme debug
+            # print(doc.page_content)
+            encoded= doc.page_content.encode('utf-8')
+            print(encoded, file=text_fh)
+        except Exception as e:
+            print(f"ERROR: {e}")
+            continue
+    text_fh.close()
+
+# OpenAI sign in is broken now for some unknown reason, this call worked before, now no bueno
+def embed_with_openai(docs):
+    embedding_func = OpenAIEmbeddings()
+    embedded_docs= FAISS.from_documents(docs, embedding_func)
+    #embedded_docs.save_local("./faiss_db")
+    # saving to a chroma file
+    #vectordb = Chroma.from_documents(docs, embedding=embeddings, persist_directory=".")
+    #vectordb.persist()
 
 # Main script
 if __name__ == '__main__':
@@ -127,20 +187,22 @@ if __name__ == '__main__':
     if (DEBUG): print(f"List of URLS extracted from the sitemaps {urls}")
     if (PROXY_STRIP): urls=[url.replace(PROXY_STRIP, 'https://') for url in urls]
     # nice for debugging less data
-    urls= urls[:2]
+    #urls= urls[:8]
     if (DEBUG): print(f"The number of sitemap urls to test are {len(urls)}")
     full_sites_text= get_text_from_urls(urls)
-    # since this is unknown text lets make sure we can write it
-    #full_sites_text= [x.encode('utf-8') for x in full_sites_text]
     print(f"recorded text {len(full_sites_text)}") 
-    text_fh= open('sites.txt', 'a')
-    for doc in full_sites_text:
-        try:
-            # for extreme debug
-            # print(doc.page_content)
-            encoded= doc.page_content.encode('utf-8')
-            print(encoded, file=text_fh)
-        except Exception as e:
-            print(f"ERROR: {e}")
-            continue
-    text_fh.close()
+
+    print("Writing to text file on SSD")
+    t0 = pc()
+    write_text_to_file(full_sites_text) 
+    print(f"Total time for writing text file to SSD: {pc()-t0} seconds")
+
+    print("Writing to SentenceTranformer/ChromaDB on SSD")
+    t0 = pc()
+    embed_with_chroma(full_sites_text) 
+    print(f"Total time for writing SentenceTransformer embedings to ChromaDB on SSD: {pc()-t0} seconds")
+
+    print("Writing to OpenAI/FAISS on SSD")
+    t0 = pc()
+    embed_with_openai(full_sites_text) 
+    print(f"Total time for writing OpenAI embedings to FAISS db on SSD: {pc()-t0} seconds")

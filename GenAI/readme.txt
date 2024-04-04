@@ -6,7 +6,7 @@ Scripts:
 web-scraper.py: 1st script, to get the data for the vector database
 
 Requirements (for Windows 11):
-# for now these are not necessary since I am testing with Chroma and FAISS 1st
+# for now these are not necessary since I am testing with local Chroma and FAISS 1st
 # Install the AWS CLI from aws.amazon.com/cli
 # Setup IAM or Identity Center access to your AWS account where you have access to Bedrock
 # Enable the models in bedrock
@@ -21,5 +21,7 @@ pip install requests
 pip install selenium
 pip install webdriver_manager
 pip install unstructured
+pip install chromadp install faiss-cpu
+
 # for a GUI later
 #pip install streamlit
