@@ -23,6 +23,7 @@ import botocore
 import boto3
 import numpy
 import langchain
+from itertools import batched
 
 # For more info on the SeleniumURLLoader see
 #  https://api.python.langchain.com/en/latest/document_loaders/langchain_community.document_loaders.url_selenium.SeleniumURLLoader.html
@@ -100,7 +101,7 @@ def get_urls_from_sitemap(sitemap):
 
 # gets text from the list of URL's you send. returns raw text chunked aiming for 1k tokens.
 # input: URLS - http(s) strings in a list
-# output: text extracted from each URL
+# output: text extracted from each URL, split into docs
 def get_text_from_urls(urls):
     try:
         # if you need to setup a different profile, check out the mozilla command line wiki
@@ -120,8 +121,7 @@ def get_text_from_urls(urls):
     docs= text_split.split_documents(data)
     return docs
 
-# writing with chroma is apparently very strange and maybe broken using the langchain version of Chroma
-# although this works
+# currently I am using the langchain version of Chroma
 def embed_with_chroma(docs):
     # create the open-source embedding function
     embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
@@ -158,11 +158,17 @@ def write_text_to_file(docs):
             continue
     text_fh.close()
 
-# OpenAI sign in is broken now for some unknown reason, this call worked before, now no bueno
 def embed_with_openai(docs):
     embedding_func = OpenAIEmbeddings()
-    embedded_docs= FAISS.from_documents(docs, embedding_func)
-    #embedded_docs.save_local("./faiss_db")
+
+    # OpenAI limits me to 150k TPM, so we need to limit the rate bit
+    final_embed= 0
+    for doclist in (batched(docs,300)):
+        if (DEBUG): print(f"Embedding batch of: {len(doclist)}")
+        temp_embed= FAISS.from_documents(doclist, embedding_func)
+        if (final_embed): final_embed.merge_from(temp_embed)
+        else: final_embed= temp_embed
+    final_embed.save_local("./faiss_db")
     # saving to a chroma file
     #vectordb = Chroma.from_documents(docs, embedding=embeddings, persist_directory=".")
     #vectordb.persist()
@@ -188,10 +194,14 @@ if __name__ == '__main__':
     if (PROXY_STRIP): urls=[url.replace(PROXY_STRIP, 'https://') for url in urls]
     # nice for debugging less data
     #urls= urls[:8]
-    if (DEBUG): print(f"The number of sitemap urls to test are {len(urls)}")
+    if (DEBUG): print(f"The number of sitemap urls to extract text from are: {len(urls)}")
+    # Playing around for testing
+    #embedding_func = OpenAIEmbeddings()
+    #db= FAISS.load_local("./faiss_db",embedding_func,allow_dangerous_deserialization="True")
+    #
     full_sites_text= get_text_from_urls(urls)
-    print(f"recorded text {len(full_sites_text)}") 
-
+    print(f"Text to record:{len(full_sites_text)}") 
+    
     print("Writing to text file on SSD")
     t0 = pc()
     write_text_to_file(full_sites_text) 
