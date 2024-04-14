@@ -1,15 +1,22 @@
 # web-scraper.py
-# V .3 alpha
+# V .5 alpha
 # Created by James Bandy
 # See the attached LICENSE file for the MIT Open Source License 
 # Let's get some great vector data from a public web site.
 # Let's write the data to two local vector stores 1st, Chromadb and FAISS
-# Use OpenAI embeddings and all-MiniLM-L6-v2 sentence transformer
+# Use OpenAI embeddings and all-MiniLM-L6-v2 sentence transformer (called BERT)
 # This is written to run from a windows 10/11 host with the software installed per the readme.txt
 #
 # Inputs
-
+# run with -h to get the full usage information
+# usage: web-scraper.py [-h] [-s STRIP] [-d DATA] [-v] {OPENAI,BERT} {ChromaDB,FAISS} sitemap_urls
+# positional arguments:
+#  {OPENAI,BERT}         Function to use for the embeddings
+#  {ChromaDB,FAISS}      method to store the embeddings
+#  sitemap_urls          list of XML sitemap URLS to gather URL info from, separated with commas
 # Outputs
+# Descriptive text, enable debugging with -v to get more info, embeds the sitemaps URL's text and
+# stores the embedded text in the specified database
 
 # Statics
 PROFILE_NAME='default' # currently unused
@@ -122,12 +129,13 @@ def get_text_from_urls(urls):
     return docs
 
 # currently I am using the langchain version of Chroma
-def embed_with_chroma(docs):
+# for now only BERT is supported to store in Chroma
+def store_with_chroma(docs,data_dir):
     # create the open-source embedding function
-    embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+    embedding_func = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
     # save to disk
-    db2 = Chroma.from_documents(docs, embedding_function, persist_directory="./chroma_db")
+    db2 = Chroma.from_documents(docs, embedding_func, persist_directory=data_dir)
     db2.persist()
 
     # extra functions for use later in another script
@@ -144,6 +152,7 @@ def embed_with_chroma(docs):
     # print results
     #print(docs[0].page_content)
 
+# 
 def write_text_to_file(docs):
         
     text_fh= open('sites.txt', 'a')
@@ -158,8 +167,15 @@ def write_text_to_file(docs):
             continue
     text_fh.close()
 
-def embed_with_openai(docs):
-    embedding_func = OpenAIEmbeddings()
+# This function can take OpenAPI Embeddings or SentenceTransformer
+# OPENAI takes a valid API token as a environment variable 'set OPENAI_API_KEY= sk-XXXX'
+# embedding function can be OPENAI or BERT
+# defaults to BERT (free)
+# For now model is hardcoded
+def store_with_faiss(docs,embedding_func,data_dir):
+    if (embedding_func=='OPENAI'):
+        embedding_func = OpenAIEmbeddings()
+    else: embedding_func = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
     # OpenAI limits me to 150k TPM, so we need to limit the rate bit
     final_embed= 0
@@ -168,23 +184,48 @@ def embed_with_openai(docs):
         temp_embed= FAISS.from_documents(doclist, embedding_func)
         if (final_embed): final_embed.merge_from(temp_embed)
         else: final_embed= temp_embed
-    final_embed.save_local("./faiss_db")
+    final_embed.save_local(data_dir)
     # saving to a chroma file
     #vectordb = Chroma.from_documents(docs, embedding=embeddings, persist_directory=".")
     #vectordb.persist()
 
 # Main script
 if __name__ == '__main__':
+
+    # Move this to a def
     parser = argparse.ArgumentParser()
-    parser.add_argument("sitemap_urls", help="list of XML sitemap URLS to gather URL info from, separated with commas")
-    parser.add_argument('-s','--strip', nargs=1,help='string to replace reverse proxy data in each URL for examplei every: https://n9./ becomes https://')
+    parser.add_argument('embedding_func',choices=['OPENAI','BERT'], help="Function to use for the embeddings")
+    parser.add_argument('embedding_db',choices=['ChromaDB','FAISS'], help="method to store the embeddings")
+    parser.add_argument('sitemap_urls', help="list of XML sitemap URLS to gather URL info from, separated with commas")
+    parser.add_argument('-s','--strip', nargs=1,help='string to replace reverse proxy data in each URL for example every: https://n9./ becomes https://')
+    parser.add_argument('-d','--data', nargs=1,help='Location to store the data files (local models only)')
     parser.add_argument("-v", "--verbosity", action="count", default=0, help="increase output verbosity")
     args = parser.parse_args()
-    PROXY_STRIP=args.strip[0]
+    print(f"args: {args}")
+    embedding_func= args.embedding_func
+    embedding_db= args.embedding_db
+    if (embedding_func=='OPENAI' and embedding_db=='ChromaDB'):
+        print("ERROR: OPENAI is not supported with ChromaDB")
+        exit(1)
+    if (args.data):
+        data_dir=args.data[0]
+    elif (embedding_func=='BERT'):
+            data_dir= "./BERT"
+    elif (embedding_func=='OPENAI'):
+        data_dir="./OPENAI"
+    if (args.strip):
+        PROXY_STRIP=args.strip[0]
     DEBUG=args.verbosity
     sitemap_urls= args.sitemap_urls.split(',')
-    print(f"PROXY_STRIP={PROXY_STRIP}")
-    print(f"DEBUG={DEBUG}")
+    if (DEBUG): print(f"PROXY_STRIP={PROXY_STRIP}")
+    if (DEBUG): print(f"DATA_DIR={data_dir}")
+    if (DEBUG): print(f"DEBUG={DEBUG}")
+    #exit(0)
+    #
+    # end move to def
+    #
+
+    # get all the URL's under each sitemap entry
     print(f"sitemap_urls={sitemap_urls}")
     urls= []
     for sitemap_url in sitemap_urls:
@@ -193,26 +234,30 @@ if __name__ == '__main__':
     if (DEBUG): print(f"List of URLS extracted from the sitemaps {urls}")
     if (PROXY_STRIP): urls=[url.replace(PROXY_STRIP, 'https://') for url in urls]
     # nice for debugging less data
-    #urls= urls[:8]
+    urls= urls[:8]
     if (DEBUG): print(f"The number of sitemap urls to extract text from are: {len(urls)}")
-    # Playing around for testing
-    #embedding_func = OpenAIEmbeddings()
-    #db= FAISS.load_local("./faiss_db",embedding_func,allow_dangerous_deserialization="True")
-    #
+
+    # gets the text from the whole site, this can take a while for a large site
     full_sites_text= get_text_from_urls(urls)
     print(f"Text to record:{len(full_sites_text)}") 
     
-    print("Writing to text file on SSD")
-    t0 = pc()
-    write_text_to_file(full_sites_text) 
-    print(f"Total time for writing text file to SSD: {pc()-t0} seconds")
+    # potentially used for reloading, but for now unused
+    #print("Writing to text file on SSD")
+    #t0 = pc()
+    #write_text_to_file(full_sites_text) 
+    #print(f"Total time for writing text file to SSD: {pc()-t0} seconds")
 
-    print("Writing to SentenceTranformer/ChromaDB on SSD")
-    t0 = pc()
-    embed_with_chroma(full_sites_text) 
-    print(f"Total time for writing SentenceTransformer embedings to ChromaDB on SSD: {pc()-t0} seconds")
-
-    print("Writing to OpenAI/FAISS on SSD")
-    t0 = pc()
-    embed_with_openai(full_sites_text) 
-    print(f"Total time for writing OpenAI embedings to FAISS db on SSD: {pc()-t0} seconds")
+    # lets create embeddings with the chosen function and store them in the chosen db
+    if (embedding_db=='ChromaDB'):
+        print("Writing to BERT/ChromaDB on SSD")
+        t0 = pc()
+        store_with_chroma(full_sites_text,data_dir) 
+        print(f"Total time for writing BERT embeddings to ChromaDB on SSD: {pc()-t0} seconds")
+    elif (embedding_db=='FAISS'):
+        if (embedding_func=='OPENAI'):
+          print("Writing to OpenAI/FAISS on SSD")
+        else:
+          print("Writing to BERT/FAISS on SSD")
+        t0 = pc()
+        store_with_faiss(full_sites_text,embedding_func,data_dir) 
+        print(f"Total time for writing to FAISS db on SSD: {pc()-t0} seconds")
