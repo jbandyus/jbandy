@@ -1,5 +1,5 @@
 # web-scraper.py
-# V .5 alpha
+# V .6 alpha
 # Created by James Bandy
 # See the attached LICENSE file for the MIT Open Source License 
 # Let's get some great vector data from a public web site.
@@ -10,14 +10,26 @@
 # If DATADIR is unset (-d directory) BERT defaults to ./BERT and OPENAI defaults to ./OPENAI 
 # If you are using OpenAI you need to get a OpenAI API Key and share it with:
 # set OPENAI_API_KEY=<KEY VALUE>
-#
+# Sample run: 
+# python web-scraper.py -v -d test BERT FAISS "https://www.example.org/sitemap.xml"
 # Inputs
 # run with -h to get the full usage information
-# usage: web-scraper.py [-h] [-s STRIP] [-d DATADIR] [-v] {OPENAI,BERT} {ChromaDB,FAISS} sitemap_urls
-# positional arguments:
-#  {OPENAI,BERT}         Function to use for the embeddings
-#  {ChromaDB,FAISS}      method to store the embeddings
-#  sitemap_urls          list of XML sitemap URLS to gather URL info from, separated with commas
+'''
+usage: web-scraper.py [-h] [-s STRIP] [-d DATADIR] [-v] {OPENAI,BERT} {ChromaDB,FAISS} sitemap_urls
+
+positional arguments:
+  {OPENAI,BERT}         Function to use for the embeddings
+  {ChromaDB,FAISS}      method to store the embeddings
+  sitemap_urls          list of XML sitemap URLS to gather URL info from, separated with commas
+
+options:
+  -h, --help            show this help message and exit
+  -s STRIP, --strip STRIP
+                        string to replace reverse proxy data in each URL for example every: https://n9./ becomes https://      
+  -d DATADIR, --datadir DATADIR
+                        Directory to store the data files (local models only)
+  -v, --verbosity       increase output verbosity
+'''
 # Outputs
 # Descriptive text, enable debugging with -v to get more info, embeds the sitemaps URL's text and
 # stores the embedded text in the specified database
