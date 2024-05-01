@@ -7,9 +7,13 @@
 # Use OpenAI embeddings and all-MiniLM-L6-v2 sentence transformer (called BERT)
 # This is written to run from a windows 10/11 host with the software installed per the readme.txt
 #
+# If DATADIR is unset (-d directory) BERT defaults to ./BERT and OPENAI defaults to ./OPENAI 
+# If you are using OpenAI you need to get a OpenAI API Key and share it with:
+# set OPENAI_API_KEY=<KEY VALUE>
+#
 # Inputs
 # run with -h to get the full usage information
-# usage: web-scraper.py [-h] [-s STRIP] [-d DATA] [-v] {OPENAI,BERT} {ChromaDB,FAISS} sitemap_urls
+# usage: web-scraper.py [-h] [-s STRIP] [-d DATADIR] [-v] {OPENAI,BERT} {ChromaDB,FAISS} sitemap_urls
 # positional arguments:
 #  {OPENAI,BERT}         Function to use for the embeddings
 #  {ChromaDB,FAISS}      method to store the embeddings
@@ -198,24 +202,24 @@ if __name__ == '__main__':
     parser.add_argument('embedding_db',choices=['ChromaDB','FAISS'], help="method to store the embeddings")
     parser.add_argument('sitemap_urls', help="list of XML sitemap URLS to gather URL info from, separated with commas")
     parser.add_argument('-s','--strip', nargs=1,help='string to replace reverse proxy data in each URL for example every: https://n9./ becomes https://')
-    parser.add_argument('-d','--data', nargs=1,help='Location to store the data files (local models only)')
+    parser.add_argument('-d','--datadir', nargs=1,help='Directory to store the data files (local models only)')
     parser.add_argument("-v", "--verbosity", action="count", default=0, help="increase output verbosity")
     args = parser.parse_args()
-    print(f"args: {args}")
+    DEBUG=args.verbosity
+    if (DEBUG): print(f"args: {args}")
     embedding_func= args.embedding_func
     embedding_db= args.embedding_db
     if (embedding_func=='OPENAI' and embedding_db=='ChromaDB'):
         print("ERROR: OPENAI is not supported with ChromaDB")
         exit(1)
-    if (args.data):
-        data_dir=args.data[0]
+    if (args.datadir):
+        data_dir=args.datadir[0]
     elif (embedding_func=='BERT'):
             data_dir= "./BERT"
     elif (embedding_func=='OPENAI'):
         data_dir="./OPENAI"
     if (args.strip):
         PROXY_STRIP=args.strip[0]
-    DEBUG=args.verbosity
     sitemap_urls= args.sitemap_urls.split(',')
     if (DEBUG): print(f"PROXY_STRIP={PROXY_STRIP}")
     if (DEBUG): print(f"DATA_DIR={data_dir}")
@@ -234,7 +238,7 @@ if __name__ == '__main__':
     if (DEBUG): print(f"List of URLS extracted from the sitemaps {urls}")
     if (PROXY_STRIP): urls=[url.replace(PROXY_STRIP, 'https://') for url in urls]
     # nice for debugging less data
-    urls= urls[:8]
+    # urls= urls[:8]
     if (DEBUG): print(f"The number of sitemap urls to extract text from are: {len(urls)}")
 
     # gets the text from the whole site, this can take a while for a large site
