@@ -1,4 +1,5 @@
 # chatbot-test-embedding.py
+# V.1 early release of sample code
 # run with: streamlit run chatbot-test-embedding.py
 # simple UI to test a prompt against a vector database
 # 
